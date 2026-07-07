@@ -18,7 +18,10 @@
       let html = "";
 
       tokens.forEach(t => {
-        let score = Math.floor(Math.random() * 100);
+        let score = Math.min(100, 
+          (t.volume.h24 / 100000) * 40 +
+          (t.priceChange.h24 || 0) * 2
+        );
 
         html += `
           <div class="border p-3 mb-2 rounded">
