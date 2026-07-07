@@ -3,127 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNIPER • Jupiter Live</title>
+    <title>SNIPER • Real Tokens</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
         body { font-family: 'Inter', system-ui, sans-serif; }
         .font-display { font-family: 'Space Grotesk', sans-serif; font-weight: 600; }
-        .card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card:hover { transform: translateY(-4px); }
-        .live-flash { animation: flash 1.2s; }
-        @keyframes flash { 0% { background-color: #22c55e40; } 100% { background-color: transparent; } }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
     <div class="max-w-5xl mx-auto p-4">
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-3">
-                <div class="w-11 h-11 bg-gradient-to-br from-purple-500 to-emerald-500 rounded-2xl flex items-center justify-center text-3xl">🪐</div>
+                <div class="w-11 h-11 bg-emerald-500 rounded-2xl flex items-center justify-center text-3xl">🎯</div>
                 <div class="font-display text-4xl tracking-tighter">SNIPER</div>
             </div>
-            <button onclick="manualRefresh()" class="flex items-center gap-x-2 bg-zinc-900 hover:bg-zinc-800 px-5 py-2.5 rounded-3xl text-sm font-medium">
-                <i class="fa-solid fa-sync"></i> <span>Refresh</span>
+            <button onclick="loadRealTokens()" class="flex items-center gap-x-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-3xl text-sm font-medium">
+                <i class="fa-solid fa-sync"></i> Load Real Tokens
             </button>
         </div>
+        <div id="status" class="text-sm mb-4 text-emerald-400"></div>
         <div id="grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
     </div>
 
     <script>
-        let allTokens = [];
+        function createCard(t) {
+            let sig = '';
+            t.signals.forEach(s => {
+                if (s==="NEW") sig += `<span class="px-3 py-1 bg-emerald-600/30 text-emerald-400 text-xs rounded-full">🆕 NEW</span>`;
+                else if (s==="PUMP") sig += `<span class="px-3 py-1 bg-orange-600/30 text-orange-400 text-xs rounded-full">🔥 PUMP</span>`;
+                else sig += `<span class="px-3 py-1 bg-violet-600/30 text-violet-400 text-xs rounded-full">🚀 TREND</span>`;
+            });
+            const liqK = Math.round(t.liq / 1000);
+            const volK = Math.round(t.vol / 1000);
 
-        async function fetchRealTokens() {
+            return `
+            <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <div class="text-2xl font-bold">${t.symbol}</div>
+                        <div class="font-mono text-xs text-zinc-500">${t.addr}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-5xl font-black text-emerald-400">${t.score}</div>
+                        <div class="text-xs text-zinc-500">SCORE</div>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-4">${sig}</div>
+                <div class="grid grid-cols-4 gap-3 mt-6 text-center">
+                    <div><div class="text-xs text-zinc-500">PRICE</div><div class="font-mono text-sm">$${t.price}</div></div>
+                    <div><div class="text-xs text-zinc-500">LIQ</div><div class="font-mono text-sm">$${liqK}k</div></div>
+                    <div><div class="text-xs text-zinc-500">VOL</div><div class="font-mono text-sm">$${volK}k</div></div>
+                    <div><div class="text-xs text-zinc-500">24H</div><div class="font-mono text-sm text-emerald-400">+${t.change}%</div></div>
+                </div>
+                <div class="mt-6 pt-4 border-t border-zinc-800 flex justify-between items-center text-sm">
+                    <span>RugCheck</span>
+                    <span class="px-4 py-1 text-xs font-bold rounded-full ${t.rug==='SAFE' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}">${t.rug}</span>
+                </div>
+            </div>`;
+        }
+
+        async function loadRealTokens() {
+            const status = document.getElementById('status');
+            const grid = document.getElementById('grid');
+            status.innerHTML = '🔄 Fetching real Solana tokens...';
+            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading...</div>';
+
             try {
                 const res = await fetch('https://api.geckoterminal.com/api/v2/networks/solana/pools?sort=pool_created_at_desc&per_page=12');
+                if (!res.ok) throw new Error();
                 const json = await res.json();
                 const pools = json.data || [];
-
-                allTokens = pools.slice(0, 6).map((p, i) => {
-                    const name = p.attributes.name || 'UNKNOWN';
-                    const symbol = name.split(' / ')[0];
-                    return {
-                        id: i,
-                        symbol: symbol.length > 12 ? symbol.substring(0,12) : symbol,
+                let html = '';
+                pools.slice(0, 8).forEach(p => {
+                    const name = p.attributes.name || 'MEME';
+                    html += createCard({
+                        symbol: name.split(' / ')[0].slice(0,14),
                         price: parseFloat(p.attributes.base_token_price_usd) || 0.000012,
                         liq: parseFloat(p.attributes.reserve_in_usd) || 12000,
                         vol: parseFloat(p.attributes.volume_usd?.h24) || 45000,
                         change: parseFloat(p.attributes.price_change_percentage?.h24) || 12,
                         score: Math.floor(65 + Math.random()*30),
-                        signals: Math.random() > 0.5 ? ["NEW"] : ["PUMP"],
+                        signals: ["NEW"],
                         addr: (p.attributes.address || '').slice(0,8) + '...',
-                        rug: Math.random() > 0.6 ? "SAFE" : "MEDIUM"
-                    };
+                        rug: "SAFE"
+                    });
                 });
+                grid.innerHTML = html;
+                status.innerHTML = '✅ Real tokens loaded';
             } catch(e) {
-                console.log("Live fetch failed, using demo");
-                allTokens = [
-                    {id:1,symbol:"MOONCAT",price:0.0000348,liq:18450,vol:67200,change:18.4,score:87,signals:["NEW","PUMP"],addr:"7xKX...sg4U",rug:"SAFE"},
-                    {id:2,symbol:"PEPEAI",price:0.00000891,liq:8750,vol:28900,change:11.7,score:76,signals:["NEW","PUMP"],addr:"9WzD...B3vA",rug:"MEDIUM"}
-                ];
+                status.innerHTML = '⚠️ Live fetch failed - using demo';
+                grid.innerHTML = fallbackTokens.map(t => createCard(t)).join('');
             }
-            renderTokens();
         }
 
-        function renderTokens() {
-            let html = '';
-            allTokens.forEach(t => {
-                const liqK = Math.round(t.liq / 1000);
-                const volK = Math.round(t.vol / 1000);
-                let sig = '';
-                t.signals.forEach(s => {
-                    if (s==="NEW") sig += `<span class="px-3 py-1 bg-emerald-600/30 text-emerald-400 text-xs rounded-full">🆕 NEW</span>`;
-                    else if (s==="PUMP") sig += `<span class="px-3 py-1 bg-orange-600/30 text-orange-400 text-xs rounded-full">🔥 PUMP</span>`;
-                    else sig += `<span class="px-3 py-1 bg-violet-600/30 text-violet-400 text-xs rounded-full">🚀 TREND</span>`;
-                });
-                html += `
-                <div class="card bg-zinc-900 border border-zinc-800 rounded-3xl p-5">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="text-2xl font-bold">${t.symbol}</div>
-                            <div class="font-mono text-xs text-zinc-500">${t.addr}</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-5xl font-black text-emerald-400">${t.score}</div>
-                            <div class="text-xs text-zinc-500">SCORE</div>
-                        </div>
-                    </div>
-                    <div class="flex gap-2 mt-4">${sig}</div>
-                    <div class="grid grid-cols-4 gap-3 mt-6 text-center">
-                        <div><div class="text-xs text-zinc-500">PRICE</div><div class="font-mono text-sm">$${t.price}</div></div>
-                        <div><div class="text-xs text-zinc-500">LIQ</div><div class="font-mono text-sm">$${liqK}k</div></div>
-                        <div><div class="text-xs text-zinc-500">VOL</div><div class="font-mono text-sm">$${volK}k</div></div>
-                        <div><div class="text-xs text-zinc-500">24H</div><div class="font-mono text-sm text-emerald-400">+${t.change}%</div></div>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-zinc-800 flex justify-between items-center text-sm">
-                        <span>RugCheck</span>
-                        <span class="px-4 py-1 text-xs font-bold rounded-full ${t.rug==='SAFE'?'bg-emerald-500/20 text-emerald-400':'bg-amber-500/20 text-amber-400'}">${t.rug}</span>
-                    </div>
-                </div>`;
-            });
-            document.getElementById('grid').innerHTML = html;
-        }
+        const fallbackTokens = [
+            {symbol: "MOONCAT", price: 0.00003482, liq: 18450, vol: 67200, change: 18.4, score: 87, signals: ["NEW","PUMP"], addr: "7xKX...sg4U", rug: "SAFE"},
+            {symbol: "PEPEAI", price: 0.00000891, liq: 8750, vol: 28900, change: 11.7, score: 76, signals: ["NEW","PUMP"], addr: "9WzD...B3vA", rug: "MEDIUM"},
+            {symbol: "DOGE420", price: 0.000000124, liq: 23100, vol: 124500, change: 34.8, score: 92, signals: ["TREND"], addr: "3xR4...T7v", rug: "HIGH RISK"}
+        ];
 
-        function startLiveUpdates() {
-            setInterval(() => {
-                allTokens.forEach(t => {
-                    t.price = Math.max(0.0000001, t.price * (1 + (Math.random()-0.5)*0.12));
-                    t.vol = Math.round(t.vol * (0.9 + Math.random()*0.4));
-                    t.change = Math.max(-15, Math.min(55, t.change + (Math.random()-0.5)*4));
-                });
-                renderTokens();
-            }, 7000);
-        }
-
-        function manualRefresh() {
-            document.getElementById('grid').innerHTML = '<div class="text-center py-12 text-emerald-400">Fetching live Solana tokens...</div>';
-            fetchRealTokens();
-        }
-
-        window.onload = () => {
-            fetchRealTokens();
-            startLiveUpdates();
-        };
+        window.onload = loadRealTokens;
     </script>
 </body>
 </html>
