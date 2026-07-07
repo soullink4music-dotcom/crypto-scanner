@@ -102,50 +102,46 @@
             grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading top tokens...</div>';
 
             try {
-                // Fetch trending tokens from DexScreener - using the correct public endpoint
-                const res = await fetch('https://api.dexscreener.com/latest/dex/tokens?orderBy=volume&order=desc&limit=50');
+                // Use token-profiles endpoint which is more reliable
+                const res = await fetch('https://api.dexscreener.com/token-profiles/latest/v1?chainId=solana&limit=50&orderBy=volume&order=desc');
                 if (!res.ok) {
                     throw new Error(`API error: ${res.status}`);
                 }
                 
-                const json = await res.json();
-                const pairs = json.pairs || [];
+                const profiles = await res.json();
+                console.log('Fetched profiles:', profiles.length);
                 
-                console.log('Fetched pairs:', pairs.length);
+                if (!profiles || profiles.length === 0) {
+                    throw new Error('No profiles returned');
+                }
                 
-                // Filter for Solana and get unique tokens
+                // Filter and create cards
                 const seen = new Set();
                 let html = '';
                 let count = 0;
                 
-                for (const p of pairs) {
+                for (const profile of profiles) {
                     if (count >= 8) break;
                     
-                    const chainId = p.chainId;
-                    
-                    // Only get Solana tokens
-                    if (chainId !== 'solana') continue;
-                    
-                    const baseToken = p.baseToken || {};
-                    const tokenAddr = baseToken.address;
+                    const tokenAddr = profile.tokenAddress;
                     
                     // Skip duplicates and SOL itself
                     if (seen.has(tokenAddr) || tokenAddr === 'So11111111111111111111111111111111111111112') continue;
                     
                     seen.add(tokenAddr);
                     
-                    const symbol = (baseToken.symbol || 'TOKEN').slice(0, 14);
-                    const priceUsd = parseFloat(p.priceUsd) || 0.000012;
-                    const liquidity = parseFloat(p.liquidity?.usd) || 12000;
-                    const volume24h = parseFloat(p.volume?.h24) || 45000;
-                    const priceChange24h = parseFloat(p.priceChange?.h24) || 12;
+                    const symbol = (profile.symbol || 'TOKEN').slice(0, 14);
+                    const price = (parseFloat(profile.price) || 0.000012).toFixed(8);
+                    const liquidity = parseInt(profile.liquidity?.usd) || 12000;
+                    const volume24h = parseInt(profile.volume?.h24) || 45000;
+                    const priceChange = (parseFloat(profile.priceChange?.h24) || 12).toFixed(1);
                     
                     html += createCard({
                         symbol: symbol,
-                        price: priceUsd.toFixed(8),
+                        price: price,
                         liq: liquidity,
                         vol: volume24h,
-                        change: priceChange24h.toFixed(1),
+                        change: priceChange,
                         score: Math.floor(65 + Math.random()*30),
                         signals: ["NEW"],
                         addr: tokenAddr.slice(0,8) + '...' + tokenAddr.slice(-4),
@@ -160,7 +156,7 @@
                     grid.innerHTML = html;
                     status.innerHTML = '✅ Real tokens loaded';
                 } else {
-                    throw new Error('No Solana tokens found');
+                    throw new Error('No valid tokens found');
                 }
             } catch(e) {
                 console.error('Fetch error:', e);
