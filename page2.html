@@ -67,14 +67,18 @@
         async function loadRealTokens() {
             const status = document.getElementById('status');
             const grid = document.getElementById('grid');
-            status.innerHTML = '🔄 Fetching real Solana tokens...';
-            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading...</div>';
+            status.innerHTML = '🔄 Trying real Solana tokens...';
+            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading from GeckoTerminal...</div>';
 
             try {
-                const res = await fetch('https://api.geckoterminal.com/api/v2/networks/solana/pools?sort=pool_created_at_desc&per_page=12');
-                if (!res.ok) throw new Error();
+                // Use CORS proxy for GitHub Pages
+                const proxy = 'https://corsproxy.io/?';
+                const url = 'https://api.geckoterminal.com/api/v2/networks/solana/pools?sort=pool_created_at_desc&per_page=12';
+                const res = await fetch(proxy + encodeURIComponent(url));
+                if (!res.ok) throw new Error('API error');
                 const json = await res.json();
                 const pools = json.data || [];
+                
                 let html = '';
                 pools.slice(0, 8).forEach(p => {
                     const name = p.attributes.name || 'MEME';
@@ -90,10 +94,11 @@
                         rug: "SAFE"
                     });
                 });
-                grid.innerHTML = html;
+                grid.innerHTML = html || '<div class="text-center py-12 text-amber-400">No tokens found. Try again.</div>';
                 status.innerHTML = '✅ Real tokens loaded';
             } catch(e) {
-                status.innerHTML = '⚠️ Live fetch failed - using demo';
+                console.error(e);
+                status.innerHTML = '⚠️ Live fetch failed - showing demo';
                 grid.innerHTML = fallbackTokens.map(t => createCard(t)).join('');
             }
         }
@@ -104,7 +109,9 @@
             {symbol: "DOGE420", price: 0.000000124, liq: 23100, vol: 124500, change: 34.8, score: 92, signals: ["TREND"], addr: "3xR4...T7v", rug: "HIGH RISK"}
         ];
 
-        window.onload = loadRealTokens;
+        window.onload = () => {
+            loadRealTokens();
+        };
     </script>
 </body>
 </html>
