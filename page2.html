@@ -67,46 +67,55 @@
         async function loadRealTokens() {
             const status = document.getElementById('status');
             const grid = document.getElementById('grid');
-            status.innerHTML = '🔄 Trying real Solana tokens...';
-            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading from GeckoTerminal...</div>';
+            status.innerHTML = '🔄 Fetching real Solana tokens...';
+            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading from DexScreener...</div>';
 
             try {
-                // Use CORS proxy for GitHub Pages
-                const proxy = 'https://corsproxy.io/?';
-                const url = 'https://api.geckoterminal.com/api/v2/networks/solana/pools?sort=pool_created_at_desc&per_page=12';
-                const res = await fetch(proxy + encodeURIComponent(url));
-                if (!res.ok) throw new Error('API error');
+                // Use DexScreener API - CORS enabled and more reliable
+                const res = await fetch('https://api.dexscreener.com/latest/dex/tokens/So11111111111111111111111111111111111111112');
+                if (!res.ok) throw new Error('DexScreener API error');
                 const json = await res.json();
-                const pools = json.data || [];
+                const pairs = json.pairs || [];
                 
                 let html = '';
-                pools.slice(0, 8).forEach(p => {
-                    const name = p.attributes.name || 'MEME';
+                pairs.slice(0, 8).forEach(p => {
+                    const baseToken = p.baseToken || {};
+                    const symbol = (baseToken.symbol || 'TOKEN').slice(0, 14);
+                    const priceUsd = parseFloat(p.priceUsd) || 0.000012;
+                    const liquidity = parseFloat(p.liquidity?.usd) || 12000;
+                    const volume24h = parseFloat(p.volume?.h24) || 45000;
+                    const priceChange24h = parseFloat(p.priceChange?.h24) || 12;
+                    
                     html += createCard({
-                        symbol: name.split(' / ')[0].slice(0,14),
-                        price: parseFloat(p.attributes.base_token_price_usd) || 0.000012,
-                        liq: parseFloat(p.attributes.reserve_in_usd) || 12000,
-                        vol: parseFloat(p.attributes.volume_usd?.h24) || 45000,
-                        change: parseFloat(p.attributes.price_change_percentage?.h24) || 12,
+                        symbol: symbol,
+                        price: priceUsd.toFixed(8),
+                        liq: liquidity,
+                        vol: volume24h,
+                        change: priceChange24h.toFixed(1),
                         score: Math.floor(65 + Math.random()*30),
                         signals: ["NEW"],
-                        addr: (p.attributes.address || '').slice(0,8) + '...',
+                        addr: (baseToken.address || '').slice(0,8) + '...',
                         rug: "SAFE"
                     });
                 });
-                grid.innerHTML = html || '<div class="text-center py-12 text-amber-400">No tokens found. Try again.</div>';
-                status.innerHTML = '✅ Real tokens loaded';
+                
+                if (html) {
+                    grid.innerHTML = html;
+                    status.innerHTML = '✅ Real tokens loaded';
+                } else {
+                    throw new Error('No data');
+                }
             } catch(e) {
-                console.error(e);
+                console.error('Fetch error:', e);
                 status.innerHTML = '⚠️ Live fetch failed - showing demo';
                 grid.innerHTML = fallbackTokens.map(t => createCard(t)).join('');
             }
         }
 
         const fallbackTokens = [
-            {symbol: "MOONCAT", price: 0.00003482, liq: 18450, vol: 67200, change: 18.4, score: 87, signals: ["NEW","PUMP"], addr: "7xKX...sg4U", rug: "SAFE"},
-            {symbol: "PEPEAI", price: 0.00000891, liq: 8750, vol: 28900, change: 11.7, score: 76, signals: ["NEW","PUMP"], addr: "9WzD...B3vA", rug: "MEDIUM"},
-            {symbol: "DOGE420", price: 0.000000124, liq: 23100, vol: 124500, change: 34.8, score: 92, signals: ["TREND"], addr: "3xR4...T7v", rug: "HIGH RISK"}
+            {symbol: "MOONCAT", price: "0.00003482", liq: 18450, vol: 67200, change: "18.4", score: 87, signals: ["NEW","PUMP"], addr: "7xKX...sg4U", rug: "SAFE"},
+            {symbol: "PEPEAI", price: "0.00000891", liq: 8750, vol: 28900, change: "11.7", score: 76, signals: ["NEW","PUMP"], addr: "9WzD...B3vA", rug: "MEDIUM"},
+            {symbol: "DOGE420", price: "0.000000124", liq: 23100, vol: 124500, change: "34.8", score: 92, signals: ["TREND"], addr: "3xR4...T7v", rug: "HIGH RISK"}
         ];
 
         window.onload = () => {
