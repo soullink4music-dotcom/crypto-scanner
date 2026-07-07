@@ -10,6 +10,14 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
         body { font-family: 'Inter', system-ui, sans-serif; }
         .font-display { font-family: 'Space Grotesk', sans-serif; font-weight: 600; }
+        .contract-addr {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .contract-addr:hover {
+            color: #10b981;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-200">
@@ -43,7 +51,17 @@
                 <div class="flex justify-between items-start">
                     <div>
                         <div class="text-2xl font-bold">${t.symbol}</div>
-                        <div class="font-mono text-xs text-zinc-500">${t.addr}</div>
+                        <div class="font-mono text-xs text-zinc-500 contract-addr cursor-pointer hover:text-emerald-400" onclick="copyAddr('${t.fullAddr}')" title="Click to copy or view on DexScreener">
+                            ${t.addr}
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <button onclick="copyAddr('${t.fullAddr}')" class="text-xs px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 rounded text-emerald-400">
+                                <i class="fa-solid fa-copy"></i> Copy
+                            </button>
+                            <button onclick="openDexScreener('${t.fullAddr}')" class="text-xs px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 rounded text-emerald-400">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> View
+                            </button>
+                        </div>
                     </div>
                     <div class="text-right">
                         <div class="text-5xl font-black text-emerald-400">${t.score}</div>
@@ -64,22 +82,49 @@
             </div>`;
         }
 
+        function copyAddr(addr) {
+            navigator.clipboard.writeText(addr);
+            alert('✓ Contract copied!');
+        }
+
+        function openDexScreener(addr) {
+            window.open(`https://dexscreener.com/solana/${addr}`, '_blank');
+        }
+
         async function loadRealTokens() {
             const status = document.getElementById('status');
             const grid = document.getElementById('grid');
-            status.innerHTML = '🔄 Fetching real Solana tokens...';
-            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading from DexScreener...</div>';
+            status.innerHTML = '🔄 Fetching trending Solana tokens...';
+            grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading top tokens...</div>';
 
             try {
-                // Use DexScreener API - CORS enabled and more reliable
-                const res = await fetch('https://api.dexscreener.com/latest/dex/tokens/So11111111111111111111111111111111111111112');
-                if (!res.ok) throw new Error('DexScreener API error');
+                // Fetch trending tokens from DexScreener
+                const res = await fetch('https://api.dexscreener.com/latest/dex/tokens?limit=30');
+                if (!res.ok) throw new Error('API error');
                 const json = await res.json();
                 const pairs = json.pairs || [];
                 
+                // Filter for Solana and get unique tokens
+                const seen = new Set();
                 let html = '';
-                pairs.slice(0, 8).forEach(p => {
+                let count = 0;
+                
+                for (const p of pairs) {
+                    if (count >= 8) break;
+                    
                     const baseToken = p.baseToken || {};
+                    const chainId = p.chainId;
+                    
+                    // Only get Solana tokens
+                    if (chainId !== 'solana') continue;
+                    
+                    const tokenAddr = baseToken.address;
+                    
+                    // Skip duplicates and SOL itself
+                    if (seen.has(tokenAddr) || tokenAddr === 'So11111111111111111111111111111111111111112') continue;
+                    
+                    seen.add(tokenAddr);
+                    
                     const symbol = (baseToken.symbol || 'TOKEN').slice(0, 14);
                     const priceUsd = parseFloat(p.priceUsd) || 0.000012;
                     const liquidity = parseFloat(p.liquidity?.usd) || 12000;
@@ -94,16 +139,19 @@
                         change: priceChange24h.toFixed(1),
                         score: Math.floor(65 + Math.random()*30),
                         signals: ["NEW"],
-                        addr: (baseToken.address || '').slice(0,8) + '...',
+                        addr: tokenAddr.slice(0,8) + '...' + tokenAddr.slice(-4),
+                        fullAddr: tokenAddr,
                         rug: "SAFE"
                     });
-                });
+                    
+                    count++;
+                }
                 
                 if (html) {
                     grid.innerHTML = html;
                     status.innerHTML = '✅ Real tokens loaded';
                 } else {
-                    throw new Error('No data');
+                    throw new Error('No tokens found');
                 }
             } catch(e) {
                 console.error('Fetch error:', e);
@@ -113,9 +161,9 @@
         }
 
         const fallbackTokens = [
-            {symbol: "MOONCAT", price: "0.00003482", liq: 18450, vol: 67200, change: "18.4", score: 87, signals: ["NEW","PUMP"], addr: "7xKX...sg4U", rug: "SAFE"},
-            {symbol: "PEPEAI", price: "0.00000891", liq: 8750, vol: 28900, change: "11.7", score: 76, signals: ["NEW","PUMP"], addr: "9WzD...B3vA", rug: "MEDIUM"},
-            {symbol: "DOGE420", price: "0.000000124", liq: 23100, vol: 124500, change: "34.8", score: 92, signals: ["TREND"], addr: "3xR4...T7v", rug: "HIGH RISK"}
+            {symbol: "MOONCAT", price: "0.00003482", liq: 18450, vol: 67200, change: "18.4", score: 87, signals: ["NEW","PUMP"], addr: "7xKX...sg4U", fullAddr: "7xKXsHZ3b5cyvmvJvFqw5V", rug: "SAFE"},
+            {symbol: "PEPEAI", price: "0.00000891", liq: 8750, vol: 28900, change: "11.7", score: 76, signals: ["NEW","PUMP"], addr: "9WzD...B3vA", fullAddr: "9WzDmDfH87cTx5B3vAmVt", rug: "MEDIUM"},
+            {symbol: "DOGE420", price: "0.000000124", liq: 23100, vol: 124500, change: "34.8", score: 92, signals: ["TREND"], addr: "3xR4...T7v", fullAddr: "3xR47TvH8cT7vBmX9L2K", rug: "HIGH RISK"}
         ];
 
         window.onload = () => {
