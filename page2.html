@@ -83,8 +83,12 @@
         }
 
         function copyAddr(addr) {
-            navigator.clipboard.writeText(addr);
-            alert('✓ Contract copied!');
+            navigator.clipboard.writeText(addr).then(() => {
+                alert('✓ Contract copied!');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                prompt('Copy this address:', addr);
+            });
         }
 
         function openDexScreener(addr) {
@@ -98,11 +102,16 @@
             grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading top tokens...</div>';
 
             try {
-                // Fetch trending tokens from DexScreener
-                const res = await fetch('https://api.dexscreener.com/latest/dex/tokens?limit=30');
-                if (!res.ok) throw new Error('API error');
+                // Fetch trending tokens from DexScreener - using the correct public endpoint
+                const res = await fetch('https://api.dexscreener.com/latest/dex/tokens?orderBy=volume&order=desc&limit=50');
+                if (!res.ok) {
+                    throw new Error(`API error: ${res.status}`);
+                }
+                
                 const json = await res.json();
                 const pairs = json.pairs || [];
+                
+                console.log('Fetched pairs:', pairs.length);
                 
                 // Filter for Solana and get unique tokens
                 const seen = new Set();
@@ -112,12 +121,12 @@
                 for (const p of pairs) {
                     if (count >= 8) break;
                     
-                    const baseToken = p.baseToken || {};
                     const chainId = p.chainId;
                     
                     // Only get Solana tokens
                     if (chainId !== 'solana') continue;
                     
+                    const baseToken = p.baseToken || {};
                     const tokenAddr = baseToken.address;
                     
                     // Skip duplicates and SOL itself
@@ -151,7 +160,7 @@
                     grid.innerHTML = html;
                     status.innerHTML = '✅ Real tokens loaded';
                 } else {
-                    throw new Error('No tokens found');
+                    throw new Error('No Solana tokens found');
                 }
             } catch(e) {
                 console.error('Fetch error:', e);
