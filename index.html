@@ -5,36 +5,58 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head><body class="bg-black text-white p-4">  <h1 class="text-xl font-bold mb-4">🚀 Lite Momentum Scanner</h1>  <button onclick="loadData()" class="bg-green-500 px-4 py-2 rounded mb-4">
     Scan Market
-  </button>  <div id="results">Click "Scan Market" to start</div>  <script>
+  </button>  <div id="results">Click "Scan Market"</div>  <script>
     async function loadData() {
       const resultsDiv = document.getElementById("results");
-      resultsDiv.innerHTML = "🔄 Scanning market...";
+      resultsDiv.innerHTML = "🔄 Scanning real tokens...";
 
       try {
-        const res = await fetch("https://api.dexscreener.com/latest/dex/search/?q=solana");
+        // 🔥 Better endpoint
+        const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=usd");
         const data = await res.json();
 
-        let tokens = (data.pairs || []).slice(0, 20);
+        let tokens = (data.pairs || [])
+
+          // ❌ Remove SOL + stablecoins
+          .filter(t =>
+            t.baseToken &&
+            t.baseToken.symbol !== "SOL" &&
+            t.baseToken.symbol !== "USDC" &&
+            t.baseToken.symbol !== "USDT"
+          )
+
+          // ✅ Keep only active tokens
+          .filter(t =>
+            (t.volume?.h24 || 0) > 50000 &&
+            (t.liquidity?.usd || 0) > 20000
+          )
+
+          .slice(0, 30);
 
         if (tokens.length === 0) {
-          resultsDiv.innerHTML = "❌ No data found. Try again.";
+          resultsDiv.innerHTML = "❌ No good tokens found. Try again.";
           return;
         }
+
+        // 🧠 Score + sort
+        tokens = tokens.map(t => {
+          let volume = t.volume?.h24 || 0;
+          let change = t.priceChange?.h24 || 0;
+
+          let score = Math.min(100,
+            (volume / 200000) * 50 +
+            (change) * 3
+          );
+
+          return { ...t, score };
+        });
+
+        tokens.sort((a, b) => b.score - a.score);
 
         let html = "";
 
         tokens.forEach(t => {
-          if (!t.baseToken) return;
-
-          let volume = t.volume?.h24 || 0;
-          let priceChange = t.priceChange?.h24 || 0;
-
-          let score = Math.min(100,
-            (volume / 100000) * 40 +
-            (priceChange) * 2
-          );
-
-          let earlyTag = priceChange < 15 ? "🟢 Early" : "🔴 Pumped";
+          let early = t.priceChange?.h24 < 20;
 
           html += `
             <div class="border border-gray-700 p-3 mb-3 rounded">
@@ -42,11 +64,12 @@
               <div class="text-sm text-gray-400">${t.baseToken.symbol}</div>
 
               <div>💰 Price: $${Number(t.priceUsd || 0).toFixed(6)}</div>
-              <div>📊 Volume (24h): ${volume.toLocaleString()}</div>
-              <div>📈 Change: ${priceChange.toFixed(2)}%</div>
+              <div>📊 Volume: ${Number(t.volume?.h24 || 0).toLocaleString()}</div>
+              <div>📈 Change: ${Number(t.priceChange?.h24 || 0).toFixed(2)}%</div>
+              <div>💧 Liquidity: ${Number(t.liquidity?.usd || 0).toLocaleString()}</div>
 
-              <div class="mt-1">⚡ Score: <b>${score.toFixed(0)}</b></div>
-              <div>${earlyTag}</div>
+              <div class="mt-1">⚡ Score: <b>${t.score.toFixed(0)}</b></div>
+              <div>${early ? "🟢 Early" : "🔴 Pumped"}</div>
 
               <div class="mt-2 flex gap-2">
                 <a href="${t.url}" target="_blank" class="bg-blue-500 px-2 py-1 rounded text-sm">Chart</a>
@@ -60,14 +83,13 @@
 
       } catch (err) {
         console.error(err);
-        document.getElementById("results").innerHTML =
-          "❌ Error loading data. Check internet or try again.";
+        resultsDiv.innerHTML = "❌ Error loading market.";
       }
     }
 
-    function copyCA(address) {
-      navigator.clipboard.writeText(address);
-      alert("Contract Address Copied!");
+    function copyCA(addr) {
+      navigator.clipboard.writeText(addr);
+      alert("Copied!");
     }
   </script></body>
 </html>
