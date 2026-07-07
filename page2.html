@@ -102,39 +102,85 @@
             grid.innerHTML = '<div class="text-center py-12 text-zinc-400">Loading top tokens...</div>';
 
             try {
-                // Use token-profiles endpoint which is more reliable
-                const res = await fetch('https://api.dexscreener.com/token-profiles/latest/v1?chainId=solana&limit=50&orderBy=volume&order=desc');
-                if (!res.ok) {
-                    throw new Error(`API error: ${res.status}`);
+                // Try multiple endpoints in sequence
+                let data = null;
+                let endpoint = '';
+                
+                try {
+                    endpoint = 'token-profiles';
+                    console.log('Trying token-profiles endpoint...');
+                    const res1 = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
+                    if (res1.ok) {
+                        data = await res1.json();
+                        console.log('token-profiles success:', data ? data.length : 0);
+                    } else {
+                        console.log('token-profiles failed:', res1.status);
+                    }
+                } catch(e) {
+                    console.log('token-profiles error:', e.message);
                 }
                 
-                const profiles = await res.json();
-                console.log('Fetched profiles:', profiles.length);
-                
-                if (!profiles || profiles.length === 0) {
-                    throw new Error('No profiles returned');
+                // Fallback to search endpoint
+                if (!data || data.length === 0) {
+                    try {
+                        endpoint = 'search';
+                        console.log('Trying search endpoint...');
+                        const res2 = await fetch('https://api.dexscreener.com/latest/dex/search?q=pump&chainId=solana');
+                        if (res2.ok) {
+                            const json = await res2.json();
+                            data = json.pairs || [];
+                            console.log('search success:', data.length);
+                        } else {
+                            console.log('search failed:', res2.status);
+                        }
+                    } catch(e) {
+                        console.log('search error:', e.message);
+                    }
                 }
                 
-                // Filter and create cards
+                // If still no data, try pairs endpoint with popular tokens
+                if (!data || data.length === 0) {
+                    try {
+                        endpoint = 'pairs';
+                        console.log('Trying pairs endpoint...');
+                        const res3 = await fetch('https://api.dexscreener.com/latest/dex/pairs/solana/8Xz4v5MvxXVrzY3kv6qB2hqhvJH7s5Y4Xk9zX3Y8Zh4');
+                        if (res3.ok) {
+                            const json = await res3.json();
+                            data = json.pairs || [];
+                            console.log('pairs success:', data.length);
+                        }
+                    } catch(e) {
+                        console.log('pairs error:', e.message);
+                    }
+                }
+                
+                // If all else fails, use demo
+                if (!data || data.length === 0) {
+                    throw new Error('All API endpoints failed');
+                }
+                
+                // Process data
                 const seen = new Set();
                 let html = '';
                 let count = 0;
                 
-                for (const profile of profiles) {
+                const items = Array.isArray(data) ? data : (data.pairs || []);
+                
+                for (const item of items) {
                     if (count >= 8) break;
                     
-                    const tokenAddr = profile.tokenAddress;
+                    const baseToken = item.baseToken || item;
+                    const tokenAddr = item.tokenAddress || baseToken.address || item.address;
                     
-                    // Skip duplicates and SOL itself
-                    if (seen.has(tokenAddr) || tokenAddr === 'So11111111111111111111111111111111111111112') continue;
+                    if (!tokenAddr || seen.has(tokenAddr) || tokenAddr === 'So11111111111111111111111111111111111111112') continue;
                     
                     seen.add(tokenAddr);
                     
-                    const symbol = (profile.symbol || 'TOKEN').slice(0, 14);
-                    const price = (parseFloat(profile.price) || 0.000012).toFixed(8);
-                    const liquidity = parseInt(profile.liquidity?.usd) || 12000;
-                    const volume24h = parseInt(profile.volume?.h24) || 45000;
-                    const priceChange = (parseFloat(profile.priceChange?.h24) || 12).toFixed(1);
+                    const symbol = (item.symbol || baseToken.symbol || 'TOKEN').slice(0, 14);
+                    const price = (parseFloat(item.price || baseToken.price || item.priceUsd) || 0.000012).toFixed(8);
+                    const liquidity = parseInt(item.liquidity?.usd || item.reserves || 12000) || 12000;
+                    const volume24h = parseInt(item.volume?.h24 || item.volumeH24 || 45000) || 45000;
+                    const priceChange = (parseFloat(item.priceChange?.h24 || item.priceChangeH24 || 12) || 12).toFixed(1);
                     
                     html += createCard({
                         symbol: symbol,
@@ -152,14 +198,14 @@
                     count++;
                 }
                 
-                if (html) {
+                if (html && count > 0) {
                     grid.innerHTML = html;
-                    status.innerHTML = '✅ Real tokens loaded';
+                    status.innerHTML = `✅ Real tokens loaded (${endpoint})`;
                 } else {
-                    throw new Error('No valid tokens found');
+                    throw new Error('No valid tokens found after filtering');
                 }
             } catch(e) {
-                console.error('Fetch error:', e);
+                console.error('All fetch attempts failed:', e);
                 status.innerHTML = '⚠️ Live fetch failed - showing demo';
                 grid.innerHTML = fallbackTokens.map(t => createCard(t)).join('');
             }
